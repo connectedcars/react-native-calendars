@@ -46,7 +46,7 @@ export default function styleConstructor(theme={}) {
       backgroundColor: appStyle.todayBackgroundColor
     },
     todayText: {
-      fontWeight: '500',
+      fontWeight: '800',
       color: theme.todayTextColor || appStyle.dayTextColor,
       //color: appStyle.textLinkColor
     },
