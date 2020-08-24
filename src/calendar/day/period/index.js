@@ -1,27 +1,19 @@
 import _ from 'lodash';
 import PropTypes from 'prop-types';
-import React, { Component } from 'react';
-import {
-  TouchableWithoutFeedback,
-  Text,
-  View,
-  Platform
-} from 'react-native';
-import { shouldUpdate } from '../../../component-updater';
-import { TouchableWithoutFeedback as RNGHTouchableWithoutFeedback } from 'react-native-gesture-handler';
-
+import React, {Component} from 'react';
+import {TouchableWithoutFeedback, Text, View} from 'react-native';
+import {shouldUpdate} from '../../../component-updater';
+import Dot from '../../dot';
 import * as defaultStyle from '../../../style';
 import styleConstructor from './style';
+import {TouchableWithoutFeedback as RNGHTouchableWithoutFeedback} from 'react-native-gesture-handler';
 
-
-const BottomSheetTouchableWithoutFeedback = props => {
-  const { children, ...rest } = props
-  return (
-    Platform.select({
-      android: <RNGHTouchableWithoutFeedback {...rest} >{children}</RNGHTouchableWithoutFeedback>,
-      ios: <TouchableWithoutFeedback {...rest} >{children}</TouchableWithoutFeedback>,
-    })
-  )
+const BottomSheetTouchableWithoutFeedback = (props) => {
+  const {children, ...rest} = props;
+  return Platform.select({
+    android: <RNGHTouchableWithoutFeedback {...rest}>{children}</RNGHTouchableWithoutFeedback>,
+    ios: <TouchableWithoutFeedback {...rest}>{children}</TouchableWithoutFeedback>,
+  });
 };
 
 class Day extends Component {
@@ -30,22 +22,21 @@ class Day extends Component {
   static propTypes = {
     // TODO: selected + disabled props should be removed
     state: PropTypes.oneOf(['selected', 'disabled', 'today', '']),
-
     // Specify theme properties to override specific styles for calendar parts. Default = {}
     theme: PropTypes.object,
     marking: PropTypes.any,
-
     onPress: PropTypes.func,
     onLongPress: PropTypes.func,
     date: PropTypes.object,
-
     markingExists: PropTypes.bool,
   };
 
   constructor(props) {
     super(props);
-    this.theme = { ...defaultStyle, ...(props.theme || {}) };
+
+    this.theme = {...defaultStyle, ...(props.theme || {})};
     this.style = styleConstructor(props.theme);
+
     this.markingStyle = this.getDrawingStyle(props.marking || []);
     this.onDayPress = this.onDayPress.bind(this);
     this.onDayLongPress = this.onDayLongPress.bind(this);
@@ -71,7 +62,7 @@ class Day extends Component {
   }
 
   getDrawingStyle(marking) {
-    const defaultStyle = { textStyle: {} };
+    const defaultStyle = {textStyle: {}, containerStyle: {}};
     if (!marking) {
       return defaultStyle;
     }
@@ -80,7 +71,7 @@ class Day extends Component {
     } else if (marking.selected) {
       defaultStyle.textStyle.color = this.theme.selectedDayTextColor;
     }
-    const resultStyle = ([marking]).reduce((prev, next) => {
+    const resultStyle = [marking].reduce((prev, next) => {
       if (next.quickAction) {
         if (next.first || next.last) {
           prev.containerStyle = this.style.firstQuickAction;
@@ -106,21 +97,27 @@ class Day extends Component {
       }
       if (next.startingDay) {
         prev.startingDay = {
-          color
+          color,
         };
       }
       if (next.endingDay) {
         prev.endingDay = {
-          color
+          color,
         };
       }
       if (!next.startingDay && !next.endingDay) {
         prev.day = {
-          color
+          color,
         };
       }
       if (next.textColor) {
         prev.textStyle.color = next.textColor;
+      }
+      if (marking.customTextStyle) {
+        defaultStyle.textStyle = marking.customTextStyle;
+      }
+      if (marking.customContainerStyle) {
+        defaultStyle.containerStyle = marking.customContainerStyle;
       }
       return prev;
     }, defaultStyle);
@@ -145,7 +142,7 @@ class Day extends Component {
     if (this.props.marking) {
       containerStyle.push({
         borderRadius: 17,
-        overflow: 'hidden'
+        overflow: 'hidden',
       });
 
       const flags = this.markingStyle;
@@ -164,38 +161,38 @@ class Day extends Component {
 
       if (flags.startingDay && !flags.endingDay) {
         leftFillerStyle = {
-          backgroundColor: this.theme.calendarBackground
+          backgroundColor: this.theme.calendarBackground,
         };
         rightFillerStyle = {
-          backgroundColor: flags.startingDay.color
+          backgroundColor: flags.startingDay.color,
         };
         containerStyle.push({
-          backgroundColor: flags.startingDay.color
+          backgroundColor: flags.startingDay.color,
         });
       } else if (flags.endingDay && !flags.startingDay) {
         rightFillerStyle = {
-          backgroundColor: this.theme.calendarBackground
+          backgroundColor: this.theme.calendarBackground,
         };
         leftFillerStyle = {
-          backgroundColor: flags.endingDay.color
+          backgroundColor: flags.endingDay.color,
         };
         containerStyle.push({
-          backgroundColor: flags.endingDay.color
+          backgroundColor: flags.endingDay.color,
         });
       } else if (flags.day) {
-        leftFillerStyle = { backgroundColor: flags.day.color };
-        rightFillerStyle = { backgroundColor: flags.day.color };
+        leftFillerStyle = {backgroundColor: flags.day.color};
+        rightFillerStyle = {backgroundColor: flags.day.color};
         // #177 bug
-        fillerStyle = { backgroundColor: flags.day.color };
+        fillerStyle = {backgroundColor: flags.day.color};
       } else if (flags.endingDay && flags.startingDay) {
         rightFillerStyle = {
-          backgroundColor: this.theme.calendarBackground
+          backgroundColor: this.theme.calendarBackground,
         };
         leftFillerStyle = {
-          backgroundColor: this.theme.calendarBackground
+          backgroundColor: this.theme.calendarBackground,
         };
         containerStyle.push({
-          backgroundColor: flags.endingDay.color
+          backgroundColor: flags.endingDay.color,
         });
       }
 
@@ -207,16 +204,28 @@ class Day extends Component {
       );
     }
 
+    const {
+      marking: {marked, dotColor},
+      theme,
+    } = this.props;
+
     return (
       <View style={this.style.wrapper}>
         {fillers}
         <BottomSheetTouchableWithoutFeedback
           testID={this.props.testID}
           onPress={this.onDayPress}
-          onLongPress={this.onDayLongPress}>
-
+          onLongPress={this.onDayLongPress}
+          disabled={this.props.marking.disableTouchEvent}
+          accessible
+          accessibilityRole={this.props.marking.disableTouchEvent ? undefined : 'button'}
+          accessibilityLabel={this.props.accessibilityLabel}
+        >
           <View style={containerStyle}>
-            <Text allowFontScaling={false} style={textStyle}>{String(this.props.children)}</Text>
+            <Text allowFontScaling={false} style={textStyle}>
+              {String(this.props.children)}
+            </Text>
+            <Dot theme={theme} isMarked={marked} dotColor={dotColor} />
           </View>
         </BottomSheetTouchableWithoutFeedback>
       </View>
