@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import {View, ViewPropTypes} from 'react-native';
+import * as ReactNative from 'react-native';
 import PropTypes from 'prop-types';
 import XDate from 'xdate';
 
@@ -13,11 +13,15 @@ import MultiPeriodDay from './day/multi-period';
 import SingleDay from './day/custom';
 import CalendarHeader from './header';
 import shouldComponentUpdate from './updater';
+import GestureRecognizer, {swipeDirections} from 'react-native-swipe-gestures';
 import {SELECT_DATE_SLOT} from '../testIDs';
 
-
-//Fallback when RN version is < 0.44
-const viewPropTypes = ViewPropTypes || View.propTypes;
+//Fallback for react-native-web or when RN version is < 0.44
+const {View, ViewPropTypes} = ReactNative;
+const viewPropTypes =
+  typeof document !== 'undefined'
+    ? PropTypes.shape({style: PropTypes.object})
+    : ViewPropTypes || View.propTypes;
 const EmptyArray = [];
 
 /**
@@ -47,16 +51,19 @@ class Calendar extends Component {
     markingType: PropTypes.string,
     /** Hide month navigation arrows. Default = false */
     hideArrows: PropTypes.bool,
-    /** Display loading indicador. Default = false */
+    /** Display loading indicator. Default = false */
     displayLoadingIndicator: PropTypes.bool,
     /** Do not show days of other months in month page. Default = false */
     hideExtraDays: PropTypes.bool,
+    /** Always show six weeks on each month. Default = false */
+    showSixWeeks: PropTypes.bool,
     /** Handler which gets executed on day press. Default = undefined */
     onDayPress: PropTypes.func,
     /** Handler which gets executed on day long press. Default = undefined */
     onDayLongPress: PropTypes.func,
-    /** Handler which gets executed when visible month changes in calendar. Default = undefined */
+    /** Handler which gets executed when month changes in calendar. Default = undefined */
     onMonthChange: PropTypes.func,
+    /** Handler which gets executed when visible month changes in calendar. Default = undefined */
     onVisibleMonthsChange: PropTypes.func,
     /** Replace default arrows with custom ones (direction can be 'left' or 'right') */
     renderArrow: PropTypes.func,
@@ -74,35 +81,42 @@ class Calendar extends Component {
     showWeekNumbers: PropTypes.bool,
     /** Handler which gets executed when press arrow icon left. It receive a callback can go back month */
     onPressArrowLeft: PropTypes.func,
-    /** Handler which gets executed when press arrow icon left. It receive a callback can go next month */
+    /** Handler which gets executed when press arrow icon right. It receive a callback can go next month */
     onPressArrowRight: PropTypes.func,
+    /** Disable left arrow. Default = false */
+    disableArrowLeft: PropTypes.bool,
+    /** Disable right arrow. Default = false */
+    disableArrowRight: PropTypes.bool,
     /** Style passed to the header */
-    headerStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.number, PropTypes.array])
+    headerStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.number, PropTypes.array]),
+    /** Provide aria-level for calendar heading for proper accessibility when used with web (react-native-web) */
+    webAriaLevel: PropTypes.number,
+    /** Apply custom disable color to selected day indexes */
+    disabledDaysIndexes: PropTypes.arrayOf(PropTypes.number),
+    /** Disable all touch events for disabled days. can be override with disableTouchEvent in markedDates*/
+    disableAllTouchEventsForDisabledDays: PropTypes.bool,
+    /** Replace default month and year title with custom one. the function receive a date as parameter. */
+    renderHeader: PropTypes.any,
+    /** Enable the option to swipe between months. Default: false */
+    enableSwipeMonths: PropTypes.bool
+  };
+
+  static defaultProps = {
+    enableSwipeMonths: false
   };
 
   constructor(props) {
     super(props);
-    
+
     this.style = styleConstructor(this.props.theme);
-    
     this.state = {
       currentMonth: props.current ? parseDate(props.current) : XDate()
     };
 
     this.updateMonth = this.updateMonth.bind(this);
-    this.addMonth = this.addMonth.bind(this);
     this.pressDay = this.pressDay.bind(this);
     this.longPressDay = this.longPressDay.bind(this);
     this.shouldComponentUpdate = shouldComponentUpdate;
-  }
-
-  componentWillReceiveProps(nextProps) {
-    const current = parseDate(nextProps.current);
-    if (current && current.toString('yyyy MM') !== this.state.currentMonth.toString('yyyy MM')) {
-      this.setState({
-        currentMonth: current.clone()
-      });
-    }
   }
 
   updateMonth(day, doNotTriggerListeners) {
@@ -147,9 +161,27 @@ class Calendar extends Component {
     this._handleDayInteraction(date, this.props.onDayLongPress);
   }
 
-  addMonth(count) {
+  addMonth = (count) => {
     this.updateMonth(this.state.currentMonth.clone().addMonths(count, true));
   }
+
+  isDateNotInTheRange = (minDate, maxDate, date) => {
+    return (minDate && !dateutils.isGTE(date, minDate)) || (maxDate && !dateutils.isLTE(date, maxDate));
+  }
+
+  getAccessibilityLabel = (state, day) => {
+    const today = XDate.locales[XDate.defaultLocale].today;
+    const formatAccessibilityLabel = XDate.locales[XDate.defaultLocale].formatAccessibilityLabel;
+    const isToday = state === 'today';
+    const markingLabel = this.getDateMarking(day);
+
+    if (formatAccessibilityLabel) {
+      return `${isToday ? today : ''} ${day.toString(formatAccessibilityLabel)} ${markingLabel}`;
+    }
+
+    return `${isToday ? 'today' : ''} ${day.toString('dddd d MMMM yyyy')} ${markingLabel}`;
+  }
+
 
   renderDay(day, id) {
     const minDate = parseDate(this.props.minDate);
@@ -157,7 +189,7 @@ class Calendar extends Component {
     let state = '';
     if (this.props.disabledByDefault) {
       state = 'disabled';
-    } else if ((minDate && !dateutils.isGTE(day, minDate)) || (maxDate && !dateutils.isLTE(day, maxDate))) {
+    } else if (this.isDateNotInTheRange(minDate, maxDate, day)) {
       state = 'disabled';
     } else if (!dateutils.sameMonth(day, this.state.currentMonth)) {
       state = 'disabled';
@@ -172,6 +204,7 @@ class Calendar extends Component {
     const DayComp = this.getDayComponent();
     const date = day.getDate();
     const dateAsObject = xdateToData(day);
+    const accessibilityLabel = this.getAccessibilityLabel(state, day);
 
     return (
       <View style={{flex: 1, alignItems: 'center'}} key={id}>
@@ -183,11 +216,42 @@ class Calendar extends Component {
           onLongPress={this.longPressDay}
           date={dateAsObject}
           marking={this.getDateMarking(day)}
+          accessibilityLabel={accessibilityLabel}
+          disableAllTouchEventsForDisabledDays={this.props.disableAllTouchEventsForDisabledDays}
         >
           {date}
         </DayComp>
       </View>
     );
+  }
+
+  getMarkingLabel(day) {
+    let label = '';
+    const marking = this.getDateMarking(day);
+
+    if (marking.accessibilityLabel) {
+      return marking.accessibilityLabel;
+    }
+
+    if (marking.selected) {
+      label += 'selected ';
+      if (!marking.marked) {
+        label += 'You have no entries for this day ';
+      }
+    }
+    if (marking.marked) {
+      label += 'You have entries for this day ';
+    }
+    if (marking.startingDay) {
+      label += 'period start ';
+    }
+    if (marking.endingDay) {
+      label += 'period end ';
+    }
+    if (marking.disabled || marking.disableTouchEvent) {
+      label += 'disabled ';
+    }
+    return label;
   }
 
   getDayComponent() {
@@ -222,8 +286,43 @@ class Calendar extends Component {
     }
   }
 
-  renderWeekNumber (weekNumber) {
-    return <Day key={`week-${weekNumber}`} theme={this.props.theme} marking={{disableTouchEvent: true}} state='disabled'>{weekNumber}</Day>;
+  onSwipe = (gestureName) => {
+    const {SWIPE_UP, SWIPE_DOWN, SWIPE_LEFT, SWIPE_RIGHT} = swipeDirections;
+
+    switch (gestureName) {
+    case SWIPE_UP:
+    case SWIPE_DOWN:
+      break;
+    case SWIPE_LEFT:
+      this.onSwipeLeft();
+      break;
+    case SWIPE_RIGHT:
+      this.onSwipeRight();
+      break;
+    }
+  }
+
+  onSwipeLeft = () => {
+    this.header.onPressRight();
+  }
+
+  onSwipeRight = () => {
+    this.header.onPressLeft();
+  }
+
+  renderWeekNumber(weekNumber) {
+    return (
+      <View style={{flex: 1, alignItems: 'center'}} key={`week-container-${weekNumber}`}>
+        <Day
+          key={`week-${weekNumber}`}
+          theme={this.props.theme}
+          marking={{disableTouchEvent: true}}
+          state='disabled'
+        >
+          {weekNumber}
+        </Day>
+      </View>
+    );
   }
 
   renderWeek(days, id) {
@@ -240,41 +339,63 @@ class Calendar extends Component {
   }
 
   render() {
-    const days = dateutils.page(this.state.currentMonth, this.props.firstDay);
+    const {currentMonth} = this.state;
+    const {firstDay, showSixWeeks, hideExtraDays, enableSwipeMonths} = this.props;
+    const shouldShowSixWeeks = showSixWeeks && !hideExtraDays;
+    const days = dateutils.page(currentMonth, firstDay, shouldShowSixWeeks);
+
     const weeks = [];
     while (days.length) {
       weeks.push(this.renderWeek(days.splice(0, 7), weeks.length));
     }
-    
+
     let indicator;
     const current = parseDate(this.props.current);
     if (current) {
       const lastMonthOfDay = current.clone().addMonths(1, true).setDate(1).addDays(-1).toString('yyyy-MM-dd');
       if (this.props.displayLoadingIndicator &&
-          !(this.props.markedDates && this.props.markedDates[lastMonthOfDay])) {
+        !(this.props.markedDates && this.props.markedDates[lastMonthOfDay])) {
         indicator = true;
       }
     }
 
+    const GestureComponent = enableSwipeMonths ? GestureRecognizer : View;
+    const gestureProps = enableSwipeMonths ? {onSwipe: (direction, state) => this.onSwipe(direction, state)} : {};
+
     return (
-      <View style={[this.style.container, this.props.style]}>
-        <CalendarHeader
-          style={this.props.headerStyle}
-          theme={this.props.theme}
-          hideArrows={this.props.hideArrows}
-          month={this.state.currentMonth}
-          addMonth={this.addMonth}
-          showIndicator={indicator}
-          firstDay={this.props.firstDay}
-          renderArrow={this.props.renderArrow}
-          monthFormat={this.props.monthFormat}
-          hideDayNames={this.props.hideDayNames}
-          weekNumbers={this.props.showWeekNumbers}
-          onPressArrowLeft={this.props.onPressArrowLeft}
-          onPressArrowRight={this.props.onPressArrowRight}
-        />
-        <View style={this.style.monthView}>{weeks}</View>
-      </View>);
+      <GestureComponent {...gestureProps}>
+        <View
+          style={[this.style.container, this.props.style]}
+          accessibilityElementsHidden={this.props.accessibilityElementsHidden} // iOS
+          importantForAccessibility={this.props.importantForAccessibility} // Android
+        >
+          <CalendarHeader
+            testID={this.props.testID}
+            ref={c => this.header = c}
+            style={this.props.headerStyle}
+            theme={this.props.theme}
+            hideArrows={this.props.hideArrows}
+            month={this.state.currentMonth}
+            addMonth={this.addMonth}
+            showIndicator={indicator}
+            firstDay={this.props.firstDay}
+            showSixWeeks={this.props.showSixWeeks}
+            renderArrow={this.props.renderArrow}
+            monthFormat={this.props.monthFormat}
+            hideDayNames={this.props.hideDayNames}
+            weekNumbers={this.props.showWeekNumbers}
+            onPressArrowLeft={this.props.onPressArrowLeft}
+            onPressArrowRight={this.props.onPressArrowRight}
+            webAriaLevel={this.props.webAriaLevel}
+            disableArrowLeft={this.props.disableArrowLeft}
+            disableArrowRight={this.props.disableArrowRight}
+            disabledDaysIndexes={this.props.disabledDaysIndexes}
+            renderHeader={this.props.renderHeader}
+          />
+          <View style={this.style.monthView}>{weeks}</View>
+        </View>
+      </GestureComponent>
+    );
   }
 }
 

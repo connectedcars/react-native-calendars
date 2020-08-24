@@ -1,4 +1,4 @@
-import {StyleSheet, Platform} from 'react-native';
+import {StyleSheet} from 'react-native';
 import * as defaultStyle from '../../style';
 
 const STYLESHEET_ID = 'stylesheet.calendar.header';
@@ -14,6 +14,9 @@ export default function(theme={}) {
       marginTop: 6,
       alignItems: 'center'
     },
+    headerContainer: {
+      flexDirection: 'row'
+    },
     monthText: {
       fontSize: appStyle.textMonthFontSize,
       fontFamily: appStyle.textMonthFontFamily,
@@ -26,14 +29,10 @@ export default function(theme={}) {
       ...appStyle.arrowStyle
     },
     arrowImage: {
-      ...Platform.select({
-        ios: {
-          tintColor: appStyle.arrowColor
-        },
-        android: {
-          tintColor: appStyle.arrowColor
-        }
-      })
+      tintColor: appStyle.arrowColor
+    },
+    disabledArrowImage: {
+      tintColor: appStyle.disabledArrowColor
     },
     week: {
       marginTop: 7,
@@ -49,6 +48,9 @@ export default function(theme={}) {
       fontFamily: appStyle.textDayHeaderFontFamily,
       fontWeight: appStyle.textDayHeaderFontWeight,
       color: appStyle.textSectionTitleColor
+    },
+    disabledDayHeader: {
+      color: appStyle.textSectionTitleDisabledColor
     },
     ...(theme[STYLESHEET_ID] || {})
   });

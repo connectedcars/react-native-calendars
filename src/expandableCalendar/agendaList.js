@@ -3,7 +3,7 @@ import React, {Component} from 'react';
 import {SectionList, Text} from 'react-native';
 import PropTypes from 'prop-types';
 import XDate from 'xdate';
-
+import moment from 'moment';
 import styleConstructor from './style';
 import asCalendarConsumer from './asCalendarConsumer';
 
@@ -14,7 +14,7 @@ const UPDATE_SOURCES = commons.UPDATE_SOURCES;
 /**
  * @description: AgendaList component
  * @extends: SectionList
- * @notes: Should be wraped in CalendarProvider component
+ * @notes: Should be wrapped in CalendarProvider component
  * @example: https://github.com/wix/react-native-calendars/blob/master/example/src/screens/expandableCalendar.js
  */
 class AgendaList extends Component {
@@ -24,12 +24,16 @@ class AgendaList extends Component {
     ...SectionList.propTypes,
     /** day format in section title. Formatting values: http://arshaw.com/xdate/#Formatting */
     dayFormat: PropTypes.string,
+    /** whether to use moment.js for date string formatting 
+     * (remember to pass 'dayFormat' with appropriate format, like 'dddd, MMM D') */
+    useMoment: PropTypes.bool,
     /** style passed to the section view */
     sectionStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.number, PropTypes.array])
   }
 
   static defaultProps = {
-    dayFormat: 'dddd, MMM d'
+    dayFormat: 'dddd, MMM d',
+    stickySectionHeadersEnabled: true
   }
 
   constructor(props) {
@@ -56,6 +60,16 @@ class AgendaList extends Component {
       }
     });
     return i;
+  }
+
+  componentDidMount() {
+    const {date} = this.props.context;
+    if (date !== this._topSection) {
+      setTimeout(() => {
+        const sectionIndex = this.getSectionIndex(date);
+        this.scrollToSection(sectionIndex);
+      }, 500);
+    }
   }
 
   componentDidUpdate(prevProps) {
@@ -120,17 +134,32 @@ class AgendaList extends Component {
   }
 
   renderSectionHeader = ({section: {title}}) => {
-    const today = XDate().toString(this.props.dayFormat).toUpperCase();
-    const date = XDate(title).toString(this.props.dayFormat).toUpperCase();
-    const todayString = XDate.locales[XDate.defaultLocale].today || commons.todayString;
-    const sectionTitle = date === today ? `${todayString.toUpperCase()}, ${date}` : date;
-    
+    let sectionTitle = title;
+
+    if (this.props.dayFormat) {
+      let date;
+      let today;
+
+      if (this.props.useMoment) {
+        date = moment(title).format(this.props.dayFormat);
+        today = moment().format(this.props.dayFormat);
+      } else {
+        date = XDate(title).toString(this.props.dayFormat);
+        today = XDate().toString(this.props.dayFormat);
+      }
+
+      const todayString = XDate.locales[XDate.defaultLocale].today || commons.todayString;
+      sectionTitle = date === today ? `${todayString}, ${date}` : date;
+    }
+
     return (
       <Text allowFontScaling={false} style={[this.style.sectionText, this.props.sectionStyle]} onLayout={this.onHeaderLayout}>{sectionTitle}</Text>
     );
   }
 
-  keyExtractor = (item, index) => String(index);
+  keyExtractor = (item, index) => {
+    return _.isFunction(this.props.keyExtractor) ? this.props.keyExtractor(item, index) : String(index);
+  }
 
   render() {
     return (
@@ -139,14 +168,13 @@ class AgendaList extends Component {
         ref={this.list}
         keyExtractor={this.keyExtractor}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled
         onViewableItemsChanged={this.onViewableItemsChanged}
         viewabilityConfig={this.viewabilityConfig}
         renderSectionHeader={this.renderSectionHeader}
         onScroll={this.onScroll}
         onMomentumScrollBegin={this.onMomentumScrollBegin}
         onMomentumScrollEnd={this.onMomentumScrollEnd}
-        // onScrollToIndexFailed={(info) => { console.warn('onScrollToIndexFailed info: ', info); }}
+        onScrollToIndexFailed={(info) => { console.warn('onScrollToIndexFailed info: ', info); }}
         // getItemLayout={this.getItemLayout} // onViewableItemsChanged is not updated when list scrolls!!!
       />
     );
